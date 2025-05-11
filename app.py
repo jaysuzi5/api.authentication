@@ -45,6 +45,15 @@ app = Flask(__name__)
 redis_client = None
 INTERNAL_ERROR = "INTERNAL SERVER ERROR"
 
+# Custom Metric:
+from opentelemetry.metrics import get_meter_provider
+meter = get_meter_provider().get_meter("api.authentication.metrics")
+unauthorized_counter = meter.create_counter(
+    name="unauthorized_user_count",
+    description="Number of unauthorized authentication attempts",
+    unit="1"
+)
+
 
 def get_env_variable(var_name, default=None):
     value = os.environ.get(var_name)
@@ -54,6 +63,7 @@ def get_env_variable(var_name, default=None):
         else:
             raise ValueError(f"Environment variable '{var_name}' not set.")
     return value
+
 
 def request_log(component: str, payload:dict = None ):
     transaction_id = str(uuid.uuid4())
@@ -78,6 +88,7 @@ def response_log(transaction_id:str, component: str, return_code, payload:dict =
     if payload:
         response_message['payload'] = payload
     logging.info(response_message)
+
 
 def publish_to_kafka(transaction_id: str, user: dict, message: str):
     kafka_server = get_env_variable("KAFKA_SERVER")
@@ -138,6 +149,7 @@ def authenticate_user(transaction_id: str, user_id: str):
             "userId": user_id
         }
         publish_to_kafka(transaction_id, user, "Unauthorized")
+        unauthorized_counter.add(1, {"userId": user_id})
         return None
 
     user_data = check_redis(user_id)
