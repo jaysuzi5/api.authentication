@@ -1,3 +1,4 @@
+confluent-kafka==2.7.0
 Flask==3.1.0
 redis==6.0.0
 requests==2.32.3
@@ -5,5 +6,6 @@ opentelemetry-distro
 opentelemetry-exporter-otlp
 opentelemetry-instrumentation-flask
 opentelemetry-instrumentation-redis
+opentelemetry-instrumentation-confluent-kafka
 opentelemetry-instrumentation-requests
 opentelemetry-instrumentation-system-metrics

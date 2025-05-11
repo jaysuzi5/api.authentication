@@ -5,6 +5,7 @@ import uuid
 import random
 import redis
 import requests
+from confluent_kafka import Producer
 from flask import Flask, jsonify, request, make_response
 
 # OpenTelemetry Instrumentation
@@ -12,6 +13,10 @@ from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.instrumentation.redis import RedisInstrumentor
 RequestsInstrumentor().instrument()
 RedisInstrumentor().instrument()
+from opentelemetry.instrumentation.confluent_kafka import ConfluentKafkaInstrumentor
+from opentelemetry.trace import get_tracer_provider
+inst = ConfluentKafkaInstrumentor()
+tracer_provider = get_tracer_provider()
 # End of OpenTelemetry Instrumentation
 
 # System Performance
@@ -74,6 +79,30 @@ def response_log(transaction_id:str, component: str, return_code, payload:dict =
         response_message['payload'] = payload
     logging.info(response_message)
 
+def publish_to_kafka(transaction_id: str, user: dict, message: str):
+    kafka_server = get_env_variable("KAFKA_SERVER")
+    conf = {
+        'bootstrap.servers': kafka_server
+    }
+    producer = Producer(conf)
+    producer = inst.instrument_producer(producer, tracer_provider)
+    topic = "test"
+
+    def delivery_report(err, _):
+        if err is not None:
+            logging.error(f"Error publishing to Kafka: {err}")
+        else:
+            logging.info("Published to Kafka")
+    message = {
+        "id": transaction_id,
+        "message": message,
+        "user": user
+    }
+    producer.produce(topic, value=str(message), callback=delivery_report)
+    producer.poll(0)
+    producer.flush()
+
+
 def load_redis(user_data: dict) -> None:
     global redis_client
     if not redis_client:
@@ -89,6 +118,7 @@ def check_redis(user_id: str) -> dict:
         redis_client = redis.Redis(host=redis_host, port=6379, decode_responses=True)
     return redis_client.get(user_id)
 
+
 def get_member(user_id: str) -> dict:
     user_data = None
     payload = {
@@ -101,9 +131,13 @@ def get_member(user_id: str) -> dict:
     return user_data
 
 
-def authenticate_user(user_id: str):
+def authenticate_user(transaction_id: str, user_id: str):
     # Random chance of 1 in 20 of not being authenticated
     if random.randint(1, 20) == 1:
+        user = {
+            "userId": user_id
+        }
+        publish_to_kafka(transaction_id, user, "Unauthorized")
         return None
 
     user_data = check_redis(user_id)
@@ -112,6 +146,7 @@ def authenticate_user(user_id: str):
         if user_data:
             load_redis(user_data)
     return user_data
+
 
 @app.route("/authenticate", methods=["POST"])
 def authenticate():
@@ -128,7 +163,7 @@ def authenticate():
         if not user_id:
             return_code = 400
         else:
-            user = authenticate_user(user_id)
+            user = authenticate_user(transaction_id, user_id)
             if not user:
                 return_code = 401
             else:
