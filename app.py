@@ -150,9 +150,15 @@ def get_member(user_id: str) -> dict:
 def authenticate_user(transaction_id: str, user_id: str):
     # Random chance of 1 in 20 of not being authenticated
     if random.randint(1, 20) == 1:
-        user = {
-            "userId": user_id
-        }
+        # Simulating that 1/3 of the unauthorized are coming from a single user
+        if random.randint(1, 3) == 1:
+            user = {
+                "userId": "johndoe"
+            }
+        else:
+            user = {
+                "userId": user_id
+            }
         publish_to_kafka(transaction_id, user, "Unauthorized")
         unauthorized_counter.add(1)
         unauthorized_counter_user_specific.add(1, {"userId": user_id})
