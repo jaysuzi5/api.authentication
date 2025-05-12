@@ -152,13 +152,10 @@ def authenticate_user(transaction_id: str, user_id: str):
     if random.randint(1, 20) == 1:
         # Simulating that 1/3 of the unauthorized are coming from a single user
         if random.randint(1, 3) == 1:
-            user = {
-                "userId": "johndoe"
-            }
-        else:
-            user = {
-                "userId": user_id
-            }
+            user_id = "johndoe"
+        user = {
+            "userId": user_id
+        }
         publish_to_kafka(transaction_id, user, "Unauthorized")
         unauthorized_counter.add(1)
         unauthorized_counter_user_specific.add(1, {"userId": user_id})
