@@ -45,9 +45,14 @@ app = Flask(__name__)
 redis_client = None
 INTERNAL_ERROR = "INTERNAL SERVER ERROR"
 
-# Custom Metric:
+# Custom Metrics:
 from opentelemetry.metrics import get_meter_provider
 meter = get_meter_provider().get_meter("api.authentication.metrics")
+unauthorized_counter_user_specific = meter.create_counter(
+    name="unauthorized_user_count_user_specific",
+    description="Number of unauthorized authentication by a specific user attempts",
+    unit="1"
+)
 unauthorized_counter = meter.create_counter(
     name="unauthorized_user_count",
     description="Number of unauthorized authentication attempts",
@@ -149,7 +154,8 @@ def authenticate_user(transaction_id: str, user_id: str):
             "userId": user_id
         }
         publish_to_kafka(transaction_id, user, "Unauthorized")
-        unauthorized_counter.add(1, {"userId": user_id})
+        unauthorized_counter.add(1)
+        unauthorized_counter_user_specific.add(1, {"userId": user_id})
         return None
 
     user_data = check_redis(user_id)
